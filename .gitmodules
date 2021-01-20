@@ -1,0 +1,3 @@
+[submodule "src/alivedb"]
+	path = src/alivedb
+	url = https://github.com/aliveprotocol/AliveDB
