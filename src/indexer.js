@@ -9,7 +9,9 @@ const reindex_output = 100000
 let indexer = {
     headBlock: 0,
     processedBlocks: 0,
+    fetchingBlock: false,
     blocks: [],
+    lastIndexOut: new Date().getTime(),
     batchLoadBlocks: (start) => new Promise((rs,rj) => {
         if (indexer.blocks.length == 0)
             axios.post(config.rpc_node,{
@@ -88,16 +90,17 @@ let indexer = {
         }
         indexer.processedBlocks++
     },
-    buildIndex: async (blockNum,cb) => {
-        let block = await indexer.batchLoadBlocks(blockNum)
+    buildIndex: async (cb) => {
+        let block = await indexer.batchLoadBlocks(indexer.processedBlocks+1)
         if (!block) {
-            console.log('Finished indexing '+(blockNum-1)+' blocks')
+            console.log('Finished indexing '+(indexer.processedBlocks)+' blocks')
             return cb()
         }
         await indexer.processBlock(block)
-        if (blockNum % reindex_output === 0)
-            console.log('INDEXED BLOCK ' + blockNum)
-        indexer.buildIndex(blockNum+1,cb)
+        if (indexer.processedBlocks % reindex_output === 0) {
+            console.log('INDEXED BLOCK #' + indexer.processedBlocks + ' (' + ((new Date().getTime()-indexer.lastIndexOut)/reindex_output) + 'b/s)')
+        }
+        indexer.buildIndex(cb)
     },
     loadState: async () => {
         // load state from mongo upon startup
@@ -106,10 +109,35 @@ let indexer = {
     stream: () => {
         setInterval(() => {
             // Get head block
+            axios.post(config.rpc_node,{
+                id: 1,
+                jsonrpc: '2.0',
+                method: 'condenser_api.get_dynamic_global_properties',
+                params: []
+            }).then((props) => {
+                indexer.headBlock = props.data.result.head_block_number
+            }).catch(() => {})
         },3000)
 
         setInterval(() => {
             // Process block live
+            if (indexer.processedBlocks < indexer.headBlock && !indexer.fetchingBlock) {
+                indexer.fetchingBlock = true
+                axios.post(config.rpc_node,{
+                    id: 1,
+                    jsonrpc: '2.0',
+                    method: 'condenser_api.get_block',
+                    params: [indexer.processedBlocks+1]
+                }).then(async (newBlock) => {
+                    let newBlock = newBlock.data.result
+                    let startTime = new Date().getTime()
+                    await indexer.processBlock(newBlock)
+                    mongo.write(indexer.processedBlocks,(count) => {
+                        console.log('Live processed block #'+indexer.processedBlocks+', updated '+count+' streams in '+(new Date().getTime() - startTime)+' ms')
+                        setTimeout(() => indexer.fetchingBlock = false,200)
+                    })
+                }).catch(() => indexer.fetchingBlock = false)
+            }
         },1500)
     }
 }

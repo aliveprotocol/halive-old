@@ -2,6 +2,7 @@ const config = require('./config')
 const constants = require('./constants')
 const AliveDB = require('./alivedb/src/alivedb')
 const mongo = require('./mongo')
+const indexer = require('./indexer')
 const Express = require('express')
 const CORS = require('cors')
 const app = Express()
@@ -49,4 +50,7 @@ app.get('/stream/:author/:link', (req,res) => {
     })
 })
 
-app.listen(config.http_port,() => console.log(`HAlive API server listening on port ${config.http_port}`))
+indexer.loadState().then(() => indexer.buildIndex(() => mongo.write(indexer.processedBlocks,() => {
+    indexer.stream()
+    app.listen(config.http_port,() => console.log(`HAlive API server listening on port ${config.http_port}`))
+})))

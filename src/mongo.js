@@ -20,6 +20,7 @@ let mongo = {
     getHeadState: () => new Promise((rs,rj),() => {
         db.collection('state').findOne({_id:'headState'},(e,s) => {
             if (e) return rj(e)
+            if (!s || !s.headBlock) return rs(0)
             rs(s.headBlock)
         })
     }),
@@ -94,7 +95,6 @@ let mongo = {
         }
     },
     write: (head,cb) => {
-        let startTime = new Date().getTime()
         let ops = []
         for (let i in mongo.streamsCache) if (mongo.streamsChanges[i]) {
             delete mongo.streamsChanges[i]
@@ -103,7 +103,7 @@ let mongo = {
             }, { $set: mongo.streamsCache[i] }, { upsert: true },() => cb(null,true)))
         }
         ops.push((cb) => db.collection('state').updateOne({ _id: 'headState' }, { $set: { headBlock: head } },{ upsert: true },() => cb(null,true)))
-        parallel(ops,() => cb(ops.length, new Date().getTime() - startTime))
+        parallel(ops,() => cb(ops.length))
     }
 }
 
