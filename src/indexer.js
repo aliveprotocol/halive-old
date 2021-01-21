@@ -1,14 +1,14 @@
 const constants = require('./constants')
 const config = require('./config')
 const validator = require('./alivedb/src/validator')
+const mongo = require('./mongo')
+const isIPFS = require('is-ipfs')
 const axios = require('axios')
-const parallel = require('run-parallel')
 const reindex_output = 100000
 
 let indexer = {
     headBlock: 0,
     processedBlocks: 0,
-    mongoOps: [],
     blocks: [],
     batchLoadBlocks: (start) => new Promise((rs,rj) => {
         if (indexer.blocks.length == 0)
@@ -25,12 +25,13 @@ let indexer = {
         else
             rs(indexer.blocks.shift())
     }),
-    processBlock: (block) => {
+    processBlock: async (block) => {
         if (!block)
             throw new Error('Cannnot process undefined block')
 
         // perform processing + validation
         // increment processed block
+        let blockTs = new Date(block.timestamp).getTime()
         let streamsToProcess = []
         for (let i in block.transactions) for (let j in block.transactions[i].operations)
             if (block.transactions[i].operations[j].type === 'custom_json_operation' &&
@@ -52,17 +53,40 @@ let indexer = {
             switch (json.op) {
                 case 0:
                     // push stream
+                    if (!json.len || Array.isArray(json.len)) break
+                    if (!json.src || Array.isArray(json.src) || json.src.length !== json.len.length) break
+                    for (let d in json.len)
+                        if (typeof json.len[d] !== 'number') break
+                    for (let h in json.src)
+                        if (!isIPFS.cid(json.src[h]) && validator.skylink(json.src[h]) !== null) break
+                    for (let r in constants.supported_res) {
+                        if (json[constants.supported_res[r]] && (Array.isArray(json[constants.supported_res[r]] || json[constants.supported_res[r]].length !== json.len.length))) break
+                        for (let h in json[constants.supported_res[r]])
+                            if (!isIPFS.cid(json[constants.supported_res[r]][h]) && validator.skylink(json[constants.supported_res[r]]) !== null) break
+                    }
+                    let stream = await mongo.getStreamPromise(streamsToProcess[s].required_posting_auths[0],json.link)
+                    if (stream) {
+                        if (stream.ended) break
+                        for (let r in constants.supported_res)
+                            if (stream[constants.supported_res[r]] && !json[constants.supported_res[r]] ||
+                                !stream[constants.supported_res[r]] && json[constants.supported_res[r]]) break
+                    }
+                    await mongo.pushStream(streamsToProcess[s].required_posting_auths[0],json.link,json,blockTs)
                     break
                 case 1:
                     // end stream
+                    await mongo.endStream(streamsToProcess[s].required_posting_auths[0],json.link)
                     break
                 case 2:
                     // configure stream
+                    if (!json.pub || typeof json.pub !== 'string' || json.pub.length !== constants.alivedb_pubkey_length) break
+                    await mongo.configureStream(streamsToProcess[s].required_posting_auths[0],json.link,json,blockTs)
                     break
                 default:
                     break
             }
         }
+        indexer.processedBlocks++
     },
     buildIndex: async (blockNum,cb) => {
         let block = await indexer.batchLoadBlocks(blockNum)
@@ -70,20 +94,14 @@ let indexer = {
             console.log('Finished indexing '+(blockNum-1)+' blocks')
             return cb()
         }
+        await indexer.processBlock(block)
         if (blockNum % reindex_output === 0)
             console.log('INDEXED BLOCK ' + blockNum)
-        indexer.processBlock(block)
         indexer.buildIndex(blockNum+1,cb)
     },
-    writeIndex: (cb) => {
-        let ops = []
-        // perform mongo write ops
-        parallel(ops,() => {
-            cb()
-        })
-    },
-    loadIndex: (cb) => {
+    loadState: async () => {
         // load state from mongo upon startup
+        indexer.processedBlocks = await mongo.getHeadState()
     },
     stream: () => {
         setInterval(() => {
