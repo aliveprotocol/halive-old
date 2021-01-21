@@ -55,12 +55,19 @@ let mongo = {
             for (let r in constants.supported_res) if (data[constants.supported_res[r]])
                 mongo.streamsCache[streamer+'/'+link][constants.supported_res[r]] = data[constants.supported_res[r]]
         } else {
-            for (let i in data.len)
-                existingStream[streamer+'/'+link].len.push(data.len[i])
-            for (let i in data.src)
-                existingStream[streamer+'/'+link].src.push(data.src[i])
-            for (let r in constants.supported_res) if (data[constants.supported_res[r]]) for (let i in data[constants.supported_res[r]])
-                existingStream[streamer+'/'+link][constants.supported_res[r]].push(data[constants.supported_res[r]][i])
+            if (existingStream.len) {
+                for (let i in data.len)
+                    existingStream[streamer+'/'+link].len.push(data.len[i])
+                for (let i in data.src)
+                    existingStream[streamer+'/'+link].src.push(data.src[i])
+                for (let r in constants.supported_res) if (data[constants.supported_res[r]]) for (let i in data[constants.supported_res[r]])
+                    existingStream[streamer+'/'+link][constants.supported_res[r]].push(data[constants.supported_res[r]][i])
+            } else {
+                existingStream[streamer+'/'+link].len = data.len
+                existingStream[streamer+'/'+link].src = data.src
+                for (let r in constants.supported_res) if (data[constants.supported_res[r]])
+                    existingStream[streamer+'/'+link][constants.supported_res[r]] = data[constants.supported_res[r]]
+            }
 
             existingStream[streamer+'/'+link].lastTs = ts
 

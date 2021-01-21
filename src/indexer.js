@@ -55,21 +55,21 @@ let indexer = {
             switch (json.op) {
                 case 0:
                     // push stream
-                    if (!json.len || Array.isArray(json.len)) break
-                    if (!json.src || Array.isArray(json.src) || json.src.length !== json.len.length) break
+                    if (!json.len || !Array.isArray(json.len)) break
+                    if (!json.src || !Array.isArray(json.src) || json.src.length !== json.len.length) break
                     for (let d in json.len)
                         if (typeof json.len[d] !== 'number') break
                     for (let h in json.src)
                         if (!isIPFS.cid(json.src[h]) && validator.skylink(json.src[h]) !== null) break
-                    for (let r in constants.supported_res) {
-                        if (json[constants.supported_res[r]] && (Array.isArray(json[constants.supported_res[r]] || json[constants.supported_res[r]].length !== json.len.length))) break
+                    for (let r in constants.supported_res) if (json[constants.supported_res[r]]) {
+                        if (!Array.isArray(json[constants.supported_res[r]] || json[constants.supported_res[r]].length !== json.len.length)) break
                         for (let h in json[constants.supported_res[r]])
                             if (!isIPFS.cid(json[constants.supported_res[r]][h]) && validator.skylink(json[constants.supported_res[r]]) !== null) break
                     }
                     let stream = await mongo.getStreamPromise(streamsToProcess[s].required_posting_auths[0],json.link)
                     if (stream) {
                         if (stream.ended) break
-                        for (let r in constants.supported_res)
+                        if (stream.len) for (let r in constants.supported_res)
                             if (stream[constants.supported_res[r]] && !json[constants.supported_res[r]] ||
                                 !stream[constants.supported_res[r]] && json[constants.supported_res[r]]) break
                     }
