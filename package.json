@@ -17,6 +17,7 @@
     "gun": "git+https://github.com/amark/gun.git",
     "is-ipfs": "^2.0.0",
     "mongodb": "^3.6.3",
+    "run-parallel": "^1.1.10",
     "yargs": "^16.2.0"
   }
 }
