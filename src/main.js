@@ -29,7 +29,7 @@ app.get('/stream/:author/:link', (req,res) => {
         if (stream.ended) m3u8File += '\n#EXT-X-PLAYLIST-TYPE:VOD'
         m3u8File += '\n\n'
 
-        for (let c = 0; c < stream.len.length; c++) {
+        if (stream.len) for (let c = 0; c < stream.len.length; c++) {
             m3u8File += '#EXTINF:' + stream.len[c] + ',\n'
             m3u8File += gw + stream[quality][c] + '\n'
         }
