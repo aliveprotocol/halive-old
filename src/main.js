@@ -7,7 +7,13 @@ const Express = require('express')
 const CORS = require('cors')
 const app = Express()
 
-mongo.init()
+mongo.init(() => {
+    indexer.loadState().then(() => indexer.buildIndex(() => mongo.write(indexer.processedBlocks,(count) => {
+        console.log('written '+count+' streams to disk')
+        indexer.stream()
+        app.listen(config.http_port,() => console.log(`HAlive API server listening on port ${config.http_port}`))
+    })))
+})
 
 app.use(CORS())
 
@@ -49,8 +55,3 @@ app.get('/stream/:author/:link', (req,res) => {
         res.status(200).send(m3u8File)
     })
 })
-
-indexer.loadState().then(() => indexer.buildIndex(() => mongo.write(indexer.processedBlocks,() => {
-    indexer.stream()
-    app.listen(config.http_port,() => console.log(`HAlive API server listening on port ${config.http_port}`))
-})))

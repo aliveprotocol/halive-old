@@ -37,9 +37,12 @@ let indexer = {
         let streamsToProcess = []
         for (let i in block.transactions) for (let j in block.transactions[i].operations)
             if (block.transactions[i].operations[j].type === 'custom_json_operation' &&
-                block.transactions[i].operations[j].value.id === constants.custom_json_id) {
-            streamsToProcess.push(block.transactions[i].operations[j].value)
-        }
+                block.transactions[i].operations[j].value.id === constants.custom_json_id)
+                streamsToProcess.push(block.transactions[i].operations[j].value)
+            else if (Array.isArray(block.transactions[i].operations[j]) &&
+                block.transactions[i].operations[j][0] === 'custom_json' &&
+                block.transactions[i].operations[j][1].id === constants.custom_json_id)
+                streamsToProcess.push(block.transactions[i].operations[j][1])
 
         for (let s in streamsToProcess) {
             let json
@@ -48,7 +51,7 @@ let indexer = {
             } catch {
                 continue
             }
-            if (!json.op || typeof json.op !== 'number' || !constants.op_codes.includes(json.op))
+            if ((!json.op && json.op !== 0) || typeof json.op !== 'number' || !constants.op_codes.includes(json.op))
                 continue
             if (!json.link || validator.link(json.link) !== null)
                 continue
@@ -128,8 +131,8 @@ let indexer = {
                     jsonrpc: '2.0',
                     method: 'condenser_api.get_block',
                     params: [indexer.processedBlocks+1]
-                }).then(async (newBlock) => {
-                    let newBlock = newBlock.data.result
+                }).then(async (r) => {
+                    let newBlock = r.data.result
                     let startTime = new Date().getTime()
                     await indexer.processBlock(newBlock)
                     mongo.write(indexer.processedBlocks,(count) => {

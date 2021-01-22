@@ -9,15 +9,16 @@ let db
 let mongo = {
     streamsCache: {},
     streamsChanges: {},
-    init: () => {
+    init: (cb) => {
         MongoClient.connect(HAliveConfig.db_url,{useUnifiedTopology: true},(e,c) => {
             if (e) throw e
             console.log('Connected to MongoDB successfully')
         
             db = c.db(HAliveConfig.db_name)
+            cb()
         })
     },
-    getHeadState: () => new Promise((rs,rj),() => {
+    getHeadState: () => new Promise((rs,rj) => {
         db.collection('state').findOne({_id:'headState'},(e,s) => {
             if (e) return rj(e)
             if (!s || !s.headBlock) return rs(0)
@@ -57,23 +58,23 @@ let mongo = {
         } else {
             if (existingStream.len) {
                 for (let i in data.len)
-                    existingStream[streamer+'/'+link].len.push(data.len[i])
+                    mongo.streamsCache[streamer+'/'+link].len.push(data.len[i])
                 for (let i in data.src)
-                    existingStream[streamer+'/'+link].src.push(data.src[i])
+                    mongo.streamsCache[streamer+'/'+link].src.push(data.src[i])
                 for (let r in constants.supported_res) if (data[constants.supported_res[r]]) for (let i in data[constants.supported_res[r]])
-                    existingStream[streamer+'/'+link][constants.supported_res[r]].push(data[constants.supported_res[r]][i])
+                    mongo.streamsCache[streamer+'/'+link][constants.supported_res[r]].push(data[constants.supported_res[r]][i])
             } else {
-                existingStream[streamer+'/'+link].len = data.len
-                existingStream[streamer+'/'+link].src = data.src
+                mongo.streamsCache[streamer+'/'+link].len = data.len
+                mongo.streamsCache[streamer+'/'+link].src = data.src
                 for (let r in constants.supported_res) if (data[constants.supported_res[r]])
-                    existingStream[streamer+'/'+link][constants.supported_res[r]] = data[constants.supported_res[r]]
+                    mongo.streamsCache[streamer+'/'+link][constants.supported_res[r]] = data[constants.supported_res[r]]
             }
 
-            existingStream[streamer+'/'+link].lastTs = ts
+            mongo.streamsCache[streamer+'/'+link].lastTs = ts
 
             // Automatically end streams if limit is hit
-            if (existingStream.len.length + data.len.length >= constants.max_chunks)
-                existingStream[streamer+'/'+link].ended = true
+            if (mongo.streamsCache[streamer+'/'+link].len.length + data.len.length >= constants.max_chunks)
+                mongo.streamsCache[streamer+'/'+link].ended = true
         }
         mongo.streamsChanges[streamer+'/'+link] = 1
     },
@@ -110,7 +111,7 @@ let mongo = {
             }, { $set: mongo.streamsCache[i] }, { upsert: true },() => cb(null,true)))
         }
         ops.push((cb) => db.collection('state').updateOne({ _id: 'headState' }, { $set: { headBlock: head } },{ upsert: true },() => cb(null,true)))
-        parallel(ops,() => cb(ops.length))
+        parallel(ops,() => cb(ops.length-1))
     }
 }
 
