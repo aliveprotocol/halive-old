@@ -32,7 +32,10 @@ app.get('/stream/:author/:link', (req,res) => {
             return res.status(404).send()
 
         // video on demand if livestream ended
-        if (stream.ended) m3u8File += '\n#EXT-X-PLAYLIST-TYPE:VOD'
+        if (stream.ended)
+            m3u8File += '\n#EXT-X-PLAYLIST-TYPE:VOD'
+        else
+            m3u8File += '\n#EXT-X-PLAYLIST-TYPE:EVENT'
         m3u8File += '\n\n'
 
         if (stream.len) for (let c = 0; c < stream.len.length; c++) {
