@@ -18,6 +18,29 @@ mongo.init(() => {
 app.use(CORS())
 
 // Compatible with Avalon
+app.get('/streaminfo/:author/:link',(req,res) => {
+    if (!req.params.author || typeof req.params.link !== 'string')
+        return res.status(400).send()
+    mongo.getStream(req.params.author,req.params.link, async (err,stream) => {
+        if (!stream) return res.status(404).send()
+        if (stream.len) {
+            stream.count = stream.len.length
+            stream.len = stream.len.reduce((a,b) => a + b,0)
+        }
+        delete stream.src
+        for (let i in config.streamRes) delete stream[config.streamRes[i]]
+        if (stream.pub) {
+            // Fetch more stream hashes from AliveDB if any
+            let gunStreams = await AliveDB.getListFromUser(stream.pub,'hive/'+req.params.author+'/'+req.params.link,false,stream.lastTs)
+            for (let s = 0; s < gunStreams.length; s++) {
+                stream.len += gunStreams[s].len
+                count++
+            }
+        }
+        res.status(200).send(stream)
+    })
+})
+
 app.get('/stream/:author/:link', (req,res) => {
     if (!req.params.author || typeof req.params.link !== 'string')
         return res.status(400).send()

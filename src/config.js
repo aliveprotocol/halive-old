@@ -9,6 +9,6 @@ let haliveConfig = {
 
 // Config overwrites through CLI args or environment vars
 for (let c in haliveConfig)
-    haliveConfig[c] = argv[c] || process.env['HALIVE_' + c.toUpperCase()] || config[c]
+    haliveConfig[c] = argv[c] || process.env['HALIVE_' + c.toUpperCase()] || haliveConfig[c]
 
 module.exports = haliveConfig
