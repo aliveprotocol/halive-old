@@ -49,26 +49,15 @@ let mongo = {
                 createdTs: ts,
                 lastTs: ts,
                 ended: false,
-                len: data.len,
-                src: data.src
+                src: [data.src]
             }
 
             for (let r in constants.supported_res) if (data[constants.supported_res[r]])
-                mongo.streamsCache[streamer+'/'+link][constants.supported_res[r]] = data[constants.supported_res[r]]
+                mongo.streamsCache[streamer+'/'+link][constants.supported_res[r]] = [data[constants.supported_res[r]]]
         } else {
-            if (existingStream.len) {
-                for (let i in data.len)
-                    mongo.streamsCache[streamer+'/'+link].len.push(data.len[i])
-                for (let i in data.src)
-                    mongo.streamsCache[streamer+'/'+link].src.push(data.src[i])
-                for (let r in constants.supported_res) if (data[constants.supported_res[r]]) for (let i in data[constants.supported_res[r]])
-                    mongo.streamsCache[streamer+'/'+link][constants.supported_res[r]].push(data[constants.supported_res[r]][i])
-            } else {
-                mongo.streamsCache[streamer+'/'+link].len = data.len
-                mongo.streamsCache[streamer+'/'+link].src = data.src
-                for (let r in constants.supported_res) if (data[constants.supported_res[r]])
-                    mongo.streamsCache[streamer+'/'+link][constants.supported_res[r]] = data[constants.supported_res[r]]
-            }
+            mongo.streamsCache[streamer+'/'+link].src.push(data.src)
+            for (let r in constants.supported_res) if (data[constants.supported_res[r]])
+                mongo.streamsCache[streamer+'/'+link][constants.supported_res[r]].push(data[constants.supported_res[r]])
 
             mongo.streamsCache[streamer+'/'+link].lastTs = ts
 
