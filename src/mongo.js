@@ -1,12 +1,16 @@
 const HAliveConfig = require('./config')
 const constants = require('./constants')
+const validator = require('./alivedb/src/validator')
+const isIPFS = require('is-ipfs')
 const cloneDeep = require('clone-deep')
 const parallel = require('run-parallel')
 const MongoClient = require('mongodb').MongoClient
+const axios = require('axios')
 
 let db
 
 let mongo = {
+    chunksCache: {},
     streamsCache: {},
     streamsChanges: {},
     init: (cb) => {
@@ -90,6 +94,58 @@ let mongo = {
             }
             mongo.streamsChanges[streamer+'/'+link] = 1
         }
+    },
+    fetchChunk: (cid) => {
+        return new Promise(async (rs,rj) => {
+            let fetchurl = ''
+            if (isIPFS.cid(cid))
+                fetchurl = HAliveConfig.ipfs_gateway + '/ipfs/' + cid
+            else if (validator.skylink(cid) === null)
+                fetchurl = HAliveConfig.skynet_webportal + '/' + cid
+            else
+                return rj('invalid cid')
+            if (cache[cid])
+                return rs(cache[cid])
+            try {
+                let cached = await db.collection('chunks').findOne({_id: cid})
+                if (cached && cached.data)
+                    return rs(cached.data)
+            } catch {}
+            try {
+                let head = (await axios.head(fetchurl)).headers
+                if (parseInt(head['content-length']) > constants.max_chunk_bytes)
+                    return rj('chunk too large')
+                if (head['content-type'] !== 'text/csv')
+                    return rj('content type is not text/csv')
+                let data = (await axios.get(fetchurl)).data
+                let lines = data.split('\n')
+                for (let i in lines) {
+                    lines[i] = lines[i].split(',')
+                    lines[i][1] = parseFloat(lines[i][1])
+                }
+                lines = mongo.filterChunk(lines)
+                cache[cid] = lines
+                db.collection('chunks').insertOne({ _id: cid, data: lines }, () => {})
+                rs(lines)
+            } catch {
+                rj('failed to fetch chunk data')
+            }
+        })
+    },
+    filterChunk: (chunk = []) => {
+        if (!Array.isArray(chunk))
+            return []
+        return chunk.filter((val) => {
+            if (!Array.isArray(val))
+                return false
+            if (val.length !== 2)
+                return false
+            if (!isIPFS.cid(val[0]) && validator.skylink(val[0]) !== null)
+                return false
+            if (typeof val[1] !== 'number')
+                return false
+            return true
+        })
     },
     write: (head,cb) => {
         let ops = []

@@ -23,9 +23,20 @@ app.get('/streaminfo/:author/:link',(req,res) => {
         return res.status(400).send()
     mongo.getStream(req.params.author,req.params.link, async (err,stream) => {
         if (!stream) return res.status(404).send()
-        if (stream.len) {
-            stream.count = stream.len.length
-            stream.len = stream.len.reduce((a,b) => a + b,0)
+        stream.len = 0
+        stream.segmentCount = 0
+        if (stream.src) {
+            stream.chunkCount = stream.src.length
+            for (let c in stream.src) {
+                let chunk = []
+                try {
+                    chunk = await mongo.fetchChunk(stream[quality][c])
+                } catch {}
+                for (let s in chunk) {
+                    stream.len += chunk[s][1]
+                    stream.segmentCount += 1
+                }
+            }
         }
         delete stream.src
         for (let i in config.streamRes) delete stream[config.streamRes[i]]
@@ -34,7 +45,7 @@ app.get('/streaminfo/:author/:link',(req,res) => {
             let gunStreams = await AliveDB.getListFromUser(stream.pub,'hive/'+req.params.author+'/'+req.params.link,false,stream.lastTs)
             for (let s = 0; s < gunStreams.length; s++) {
                 stream.len += gunStreams[s].len
-                count++
+                stream.segmentCount++
             }
         }
         res.status(200).send(stream)
@@ -61,9 +72,15 @@ app.get('/stream/:author/:link', (req,res) => {
             m3u8File += '\n#EXT-X-PLAYLIST-TYPE:EVENT'
         m3u8File += '\n\n'
 
-        if (stream.len) for (let c = 0; c < stream.len.length; c++) {
-            m3u8File += '#EXTINF:' + stream.len[c] + ',\n'
-            m3u8File += gw + stream[quality][c] + '\n'
+        for (let c in stream[quality]) {
+            let chunk = []
+            try {
+                chunk = await mongo.fetchChunk(stream[quality][c])
+            } catch {}
+            for (let s in chunk) {
+                m3u8File += '#EXTINF:' + chunk[s][1] + ',\n'
+                m3u8File += gw + chunk[s][0] + '\n'
+            }
         }
 
         if (stream.ended)
