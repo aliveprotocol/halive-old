@@ -104,27 +104,27 @@ let mongo = {
                 fetchurl = HAliveConfig.skynet_webportal + '/' + cid
             else
                 return rj('invalid cid')
-            if (cache[cid])
-                return rs(cache[cid])
+            if (mongo.chunksCache[cid])
+                return rs(mongo.chunksCache[cid])
             try {
                 let cached = await db.collection('chunks').findOne({_id: cid})
                 if (cached && cached.data)
                     return rs(cached.data)
             } catch {}
             try {
-                let head = (await axios.head(fetchurl)).headers
+                let head = (await axios.head(fetchurl, {timeout: HAliveConfig.chunk_fetch_timeout})).headers
                 if (parseInt(head['content-length']) > constants.max_chunk_bytes)
                     return rj('chunk too large')
                 if (head['content-type'] !== 'text/csv')
                     return rj('content type is not text/csv')
-                let data = (await axios.get(fetchurl)).data
+                let data = (await axios.get(fetchurl, {timeout: HAliveConfig.chunk_fetch_timeout})).data
                 let lines = data.split('\n')
                 for (let i in lines) {
                     lines[i] = lines[i].split(',')
                     lines[i][1] = parseFloat(lines[i][1])
                 }
                 lines = mongo.filterChunk(lines)
-                cache[cid] = lines
+                mongo.chunksCache[cid] = lines
                 db.collection('chunks').insertOne({ _id: cid, data: lines }, () => {})
                 rs(lines)
             } catch {
